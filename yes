@@ -1,0 +1,132 @@
+local BASE_UI_NAME = "SoundLogger_UI"
+
+-- // NEW: Automatically destroy any previously running version of this script.
+if game:GetService("CoreGui"):FindFirstChild(BASE_UI_NAME) then
+    game:GetService("CoreGui"):FindFirstChild(BASE_UI_NAME):Destroy()
+    print("Cleaned up old Sound Logger UI. Initializing new version...")
+end
+
+-- // --- UI CREATION (Most Compatible Method) ---
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = BASE_UI_NAME -- Use the constant base name for the new UI
+screenGui.ResetOnSpawn = false
+screenGui.Parent = game:GetService("CoreGui")
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 320, 0, 250)
+mainFrame.Position = UDim2.new(0, 10, 0, 10)
+mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+mainFrame.BorderColor3 = Color3.fromRGB(80, 80, 80)
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+
+local uiCorner = Instance.new("UICorner"); uiCorner.CornerRadius = UDim.new(0, 6); uiCorner.Parent = mainFrame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+title.Text = "Sound Log"
+title.Font = Enum.Font.GothamBold
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextScaled = true
+title.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner"); titleCorner.CornerRadius = UDim.new(0, 6); titleCorner.Parent = title
+
+local scrollingFrame = Instance.new("ScrollingFrame")
+scrollingFrame.Position = UDim2.new(0, 5, 0, 35)
+scrollingFrame.Size = UDim2.new(1, -10, 1, -40)
+scrollingFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+scrollingFrame.BorderSizePixel = 0
+scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+scrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(120, 120, 120)
+scrollingFrame.ScrollBarThickness = 6
+scrollingFrame.Parent = mainFrame
+
+local logListLayout = Instance.new("UIListLayout")
+logListLayout.Padding = UDim.new(0, 5)
+logListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+logListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+logListLayout.Parent = scrollingFrame
+
+-- // --- Template for log entries ---
+local logEntryTemplate = Instance.new("Frame")
+logEntryTemplate.Name = "LogEntryTemplate"
+logEntryTemplate.Size = UDim2.new(1, 0, 0, 60)
+logEntryTemplate.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+logEntryTemplate.BorderSizePixel = 0
+logEntryTemplate.Visible = false
+logEntryTemplate.Parent = scrollingFrame
+-- (Template children)
+local templateCorner = Instance.new("UICorner"); templateCorner.CornerRadius = UDim.new(0, 4); templateCorner.Parent = logEntryTemplate
+local soundNameLabel = Instance.new("TextLabel"); soundNameLabel.Name = "SoundName"; soundNameLabel.Size = UDim2.new(1, -5, 0.5, -5); soundNameLabel.Position = UDim2.new(0, 5, 0, 0); soundNameLabel.Font = Enum.Font.Gotham; soundNameLabel.TextColor3 = Color3.fromRGB(225, 225, 225); soundNameLabel.TextXAlignment = Enum.TextXAlignment.Left; soundNameLabel.TextYAlignment = Enum.TextYAlignment.Top; soundNameLabel.BackgroundTransparency = 1; soundNameLabel.TextScaled = true; soundNameLabel.Parent = logEntryTemplate
+local soundIdLabel = Instance.new("TextLabel"); soundIdLabel.Name = "SoundId"; soundIdLabel.Size = UDim2.new(0.6, 0, 0.5, -5); soundIdLabel.Position = UDim2.new(0, 5, 0.5, 0); soundIdLabel.Font = Enum.Font.Gotham; soundIdLabel.TextColor3 = Color3.fromRGB(200, 200, 200); soundIdLabel.TextXAlignment = Enum.TextXAlignment.Left; soundIdLabel.TextYAlignment = Enum.TextYAlignment.Bottom; soundIdLabel.BackgroundTransparency = 1; soundIdLabel.TextScaled = true; soundIdLabel.Parent = logEntryTemplate
+local copyButton = Instance.new("TextButton"); copyButton.Name = "CopyButton"; copyButton.Size = UDim2.new(0.3, 0, 0.4, 0); copyButton.Position = UDim2.new(0.7, -5, 0.5, -5); copyButton.BackgroundColor3 = Color3.fromRGB(80, 80, 80); copyButton.Font = Enum.Font.GothamBold; copyButton.Text = "Copy ID"; copyButton.TextColor3 = Color3.fromRGB(255, 255, 255); copyButton.TextScaled = true; copyButton.Parent = logEntryTemplate
+local copyCorner = Instance.new("UICorner"); copyCorner.CornerRadius = UDim.new(0, 4); copyCorner.Parent = copyButton
+
+-- // --- CORE LOGIC ---
+local soundHistory = {}
+local MAX_LOG_ENTRIES = 100
+
+local function logNewSound(sound)
+	if not sound:IsA("Sound") then return end
+	local soundId = sound.SoundId:match("%d+") or "N/A"
+	
+	print("[DEBUG] Detected sound:", sound.Name, "| ID:", soundId)
+
+	if soundId == "N/A" or soundHistory[soundId] then
+		print("[DEBUG] Sound is invalid or already logged. Aborting.")
+		return
+	end
+	
+	soundHistory[soundId] = true
+	local newEntry = logEntryTemplate:Clone()
+	newEntry.LayoutOrder = tick()
+	newEntry.Name = sound.Name
+	newEntry.SoundName.Text = "Name: " .. sound.Name
+	newEntry.SoundId.Text = "ID: " .. soundId
+	newEntry.Parent = scrollingFrame
+	newEntry.Visible = true
+
+	print("[DEBUG] Cloned new UI entry for", sound.Name)
+	
+	local copyBtn = newEntry.CopyButton
+	copyBtn.MouseButton1Click:Connect(function()
+		if setclipboard then
+			setclipboard(soundId)
+			copyBtn.Text = "Copied!"
+			task.wait(1.5)
+			copyBtn.Text = "Copy ID"
+		end
+	end)
+end
+
+-- // --- DETECTION ---
+game.DescendantAdded:Connect(function(descendant)
+	if descendant:IsA("Sound") then
+		descendant.Played:Once(function()
+			task.spawn(logNewSound, descendant)
+		end)
+	end
+end)
+
+-- // Manually update the canvas size whenever a new log is added or removed.
+scrollingFrame.ChildAdded:Connect(function()
+    local totalHeight = 0
+	local entryCount = #scrollingFrame:GetChildren() - 2 -- (-2 for template and layout)
+	if entryCount < 0 then entryCount = 0 end
+    totalHeight = entryCount * 60 + (entryCount - 1) * 5
+	if totalHeight < 0 then totalHeight = 0 end
+    scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+end)
+
+scrollingFrame.ChildRemoved:Connect(function()
+    local totalHeight = 0
+	local entryCount = #scrollingFrame:GetChildren() - 2 -- (-2 for template and layout)
+	if entryCount < 0 then entryCount = 0 end
+    totalHeight = entryCount * 60 + (entryCount - 1) * 5
+	if totalHeight < 0 then totalHeight = 0 end
+    scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+end)
